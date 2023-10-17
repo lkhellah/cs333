@@ -1,7 +1,7 @@
 # Layaal Khellah
 # October 13, 2023
 # CS 333 Lab 2: VIKTAR
-
+# ADD -werror
 CC = gcc
 DEBUG = -g
 DEFINES =
@@ -9,7 +9,7 @@ DEFINES =
 CFLAGS = $(DEBUG) -Wall -Wextra -Wshadow -Wunreachable-code -Wredundant-decls \
 		-Wmissing-declarations -Wold-style-definition \
 		-Wmissing-prototypes -Wdeclaration-after-statement \
-		-Wno-return-local-addr -Wunsafe-loop-optimizations -Wuninitialized -Werror 
+		-Wno-return-local-addr -Wunsafe-loop-optimizations -Wuninitialized 
 PROG1 = viktar
 INCLUDES = viktar.h
 
