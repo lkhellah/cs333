@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <grp.h>
 #include <inttypes.h>
+#include <sys/time.h>
 
 #include "viktar.h"
 
@@ -126,8 +127,8 @@ void toc(char * filename, int action)
 	{
 		printf("archive from stdin\n");
 	}
-	read(ifd, buf, strlen(VIKTAR_NAME)); //was VIKTAR_NAME 
-	if (strncmp(buf, VIKTAR_NAME, strlen(VIKTAR_NAME)) != 0) 
+	read(ifd, buf, strlen(VIKTAR_FILE));
+	if (strncmp(buf, VIKTAR_FILE, strlen(VIKTAR_FILE)) != 0) 
 	{
 		printf("invalid viktar file\n"); //FIX STATEMENT  ./viktar -t -f 01-.txt, IS THIS LINES 115-116 TOO
 		exit(EXIT_SUCCESS);
@@ -226,12 +227,16 @@ void symb_rep(mode_t mode)
          printf("\t\tmode: %s\n", symbolicMode);
  
  }
-void extract(char * filename, char ** string)
+void extract(char * filename, char ** argv)
 {
 
 	int ifd = STDIN_FILENO;
-	char buf[100];
+	int ofd;
 	viktar_header_t header;
+	int verbose = 0;
+	char viktar_signature[100];
+	//char buf[100];
+	mode_t old_umask;
 
 	if (filename != NULL) 
 	{
@@ -240,19 +245,90 @@ void extract(char * filename, char ** string)
 		{
 			fprintf(stderr, "failed to open input archive file %s", filename);
 			printf("exiting...\n");
+			exit(EXIT_FAILURE);
 		}
 	}	
 	else
 	{
 		printf("archive from stdin\n");
 	}
-
-	read(ifd, buf, strlen(VIKTAR_NAME)); //was VIKTAR_NAME 
-	if (strncmp(buf, VIKTAR_NAME, strlen(VIKTAR_NAME)) != 0) 
+	//verifyig header
+	read(ifd, viktar_signature, strlen(VIKTAR_FILE));
+	if (strncmp(viktar_signature, VIKTAR_FILE, strlen(VIKTAR_FILE)) != 0) 
 	{
 		printf("invalid viktar file\n"); //FIX STATEMENT  ./viktar -t -f 01-.txt, IS THIS LINES 115-116 TOO
 		exit(EXIT_SUCCESS);
 	}
+
+	// Set umask to 0 to ensure correct permissions
+    	old_umask = umask(0);
+	
+    	while (read(ifd, &header, sizeof(header)) > 0) {
+		char buf[100];
+		char * file_data;
+		struct timeval times[2];
+        	int should_extract = 0; // Initialize to not extract
+		
+		memset(buf, 0, sizeof(buf));
+		strncpy(buf, header.viktar_name, VIKTAR_MAX_FILE_NAME_LEN);	
+		
+		// Check if the current file should be extracted based on the provided list of files
+
+        	for (int i = optind; argv[i] != NULL; i++) {
+            		if (strcmp(buf, argv[i]) == 0) {
+                		should_extract = 1;
+                		break;
+            		}
+        	}
+		
+		if (should_extract)
+		{
+			// Open a new file with the same name as in the archive and specified permissions
+			ofd = open(buf, O_WRONLY | O_CREAT, header.st_mode);
+			if (ofd < 0) {
+				fprintf(stderr, "Failed to open output file %s\n", buf);
+				continue; // Skip to the next file
+			}
+
+			// If verbose, print a message about extracting the file
+			if (verbose) {
+			printf("Extracting file: %s\n", buf);
+			}
+
+			// Allocate a buffer for the file's data, read the data, and write it to the new file
+			file_data = (char *)malloc(header.st_size);
+			if (read(ifd, file_data, header.st_size) < 0) {
+				fprintf(stderr, "Failed to read file data for %s\n", buf);
+				close(ofd);
+				free(file_data);
+				continue; // Skip to the next file
+			}
+			write(ofd, file_data, header.st_size);
+			close(ofd);
+			free(file_data);
+
+			// Set the file's permissions to match the information from the archive
+			fchmod(ofd, header.st_mode);
+
+			// If the restore time flag is set, set the file's access and modification times
+			times[0].tv_sec = header.st_atim.tv_sec;
+			times[0].tv_usec = header.st_atim.tv_nsec / 1000;
+			times[1].tv_sec = header.st_mtim.tv_sec;
+			times[1].tv_usec = header.st_mtim.tv_nsec / 1000;
+			futimes(ofd, times);
+		}
+		else
+		{
+			// Skip to the next file in the archive
+			lseek(ifd, header.st_size, SEEK_CUR);
+		}
+	}
+	// Reset the umask to its previous value
+	umask(old_umask);
+	if (filename != NULL) {
+		close(ifd);
+    	}
+
 
 
 
