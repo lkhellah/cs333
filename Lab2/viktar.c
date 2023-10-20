@@ -30,8 +30,6 @@ int main(int argc, char *argv[])
 	int action = 0; //used for x,c, t, or T because only one should be on command line at once
 	int opt = 0;
 	char *filename = NULL;
-	display_options();
-	
 
 	
 	while((opt = getopt(argc, argv,  OPTIONS)) != -1 )
@@ -62,8 +60,8 @@ int main(int argc, char *argv[])
 				fprintf(stderr,"verbose level: %d\n", verbose);
 				break;
 			default:
-				printf("./viktar: invalid option -- '%c'", optopt); //NOT OPTOPT FIX
-				printf("\noopsie - unrecognized command line option FIX THIS\n");
+				//printf("./viktar: invalid option -- '%c'", optopt); //NOT OPTOPT FIX
+				printf("oopsie - unrecognized command line option\n");
 				break; //not exit since it says "The program should ignore the wayward option and continue (if possible)"
 		}
 
@@ -104,7 +102,7 @@ void display_options(void)
 	printf("\n\t\t-f filename\tuse filename as the archive file");
 	printf("\n\t\t-v\t\tgive verbose diagnostic messages");
 	printf("\n\t\t-h\t\tdisplay this AMAZING help message\n");
-
+	
 
 }
 
@@ -273,7 +271,7 @@ void extract(char * filename, char ** argv)
 		memset(buf, 0, sizeof(buf));
 		strncpy(buf, header.viktar_name, VIKTAR_MAX_FILE_NAME_LEN);	
 		
-		// Check if the current file should be extracted based on the provided list of files
+		// Check if the current file should be extracted
 
         	for (int i = optind; argv[i] != NULL; i++) {
             		if (strcmp(buf, argv[i]) == 0) {
@@ -355,7 +353,8 @@ void create(char *filename, char *argv[], int argc) {
         archive_filename = "stdout";
     }
 
-    if (argc > 1) {
+    if (argc > 1) 
+    {
         // Archive contains files, write the viktar header
         if (write(ofd, VIKTAR_FILE, strlen(VIKTAR_FILE)) < 0) {
             fprintf(stderr, "Failed to write viktar header to %s\n", archive_filename);
