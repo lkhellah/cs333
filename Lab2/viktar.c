@@ -61,7 +61,11 @@ int main(int argc, char *argv[])
 				break;
 			default:
 				//printf("./viktar: invalid option -- '%c'", optopt); //NOT OPTOPT FIX
-				printf("oopsie - unrecognized command line option\n");
+				fprintf(stderr,"oopsie - unrecognized command line option \"%s\"\n", argv[optind]);
+				if(argv[optind] == 0) {
+					fprintf(stderr, "no action supplied\nexiting without doing ANYTHING...\n");
+					exit(EXIT_FAILURE);
+				}
 				break; //not exit since it says "The program should ignore the wayward option and continue (if possible)"
 		}
 
@@ -311,9 +315,8 @@ void extract(char * filename, char ** argv)
 
 			// If the restore time flag is set, set the file's access and modification times
 			times[0].tv_sec = header.st_atim.tv_sec;
-			times[0].tv_usec = header.st_atim.tv_nsec / 1000;
 			times[1].tv_sec = header.st_mtim.tv_sec;
-			times[1].tv_usec = header.st_mtim.tv_nsec / 1000;
+			//times[2].tv_sec = header.st_ctime.tv_sec;
 			futimes(ofd, times);
 		}
 		else
@@ -341,7 +344,7 @@ void create(char *filename, char *argv[], int argc) {
 
     // Determine the output file descriptor
     if (filename != NULL) {
-        ofd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644); // Use specified filename and 0644 permissions
+        ofd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644); // 0644 permissions
         if (ofd < 0) {
             fprintf(stderr, "Failed to open output archive file %s\n", filename);
             exit(EXIT_FAILURE);
@@ -364,24 +367,26 @@ void create(char *filename, char *argv[], int argc) {
         // Process each file specified on the command line
         for (int i = 1; i < argc; i++) 
 	{
-            char *file = argv[i]; // Renamed variable
+            char *file = argv[i]; 
             struct stat st;
 	    int ifd;
 	    char buffer[1000];
             ssize_t bytes_read;
+
             // Set the viktar header information for the current file
             memset(&header, 0, sizeof(viktar_header_t));
             strncpy(header.viktar_name, file, VIKTAR_MAX_FILE_NAME_LEN);
 
-            // Use stat to populate the header fields
+            // Use stat to fill the header fields
             if (stat(file, &st) == 0) {
                 header.st_mode = st.st_mode;
                 header.st_uid = st.st_uid;
                 header.st_gid = st.st_gid;
                 header.st_size = st.st_size;
-                header.st_atim = st.st_atim;
-                header.st_mtim = st.st_mtim;
-                header.st_ctim = st.st_ctim;
+		header.st_atim.tv_sec = st.st_atim.tv_sec;
+		header.st_mtim.tv_sec = st.st_mtim.tv_sec;
+		header.st_ctim.tv_sec = st.st_ctim.tv_sec;
+
             } else {
                 perror("Failed to stat source file");
                 continue;
