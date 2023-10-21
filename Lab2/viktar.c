@@ -338,94 +338,121 @@ void extract(char * filename, char ** argv)
 
 
 void create(char *filename, char *argv[], int argc) {
-    int ofd;  // Output file descriptor
-    viktar_header_t header;
-    char *archive_filename;
+	int ofd;  // Output file descriptor
+	viktar_header_t header;
+	char *archive_filename;
 
-    // Determine the output file descriptor
-    if (filename != NULL) {
-        ofd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644); // 0644 permissions
-        if (ofd < 0) {
-            fprintf(stderr, "Failed to open output archive file %s\n", filename);
-            exit(EXIT_FAILURE);
-        }
-        archive_filename = filename;
-    } else {
-        // Output to stdout
-        ofd = STDOUT_FILENO;
-        archive_filename = "stdout";
-    }
-
-    if (argc > 1) 
-    {
-        // Archive contains files, write the viktar header
-        if (write(ofd, VIKTAR_FILE, strlen(VIKTAR_FILE)) < 0) {
-            fprintf(stderr, "Failed to write viktar header to %s\n", archive_filename);
-            exit(EXIT_FAILURE);
-        }
-        
-        // Process each file specified on the command line
-        for (int i = 1; i < argc; i++) 
+	// Determine the output file descriptor
+	if (filename != NULL) 
 	{
-            char *file = argv[i]; 
-            struct stat st;
-	    int ifd;
-	    char buffer[1000];
-            ssize_t bytes_read;
 
-            // Set the viktar header information for the current file
-            memset(&header, 0, sizeof(viktar_header_t));
-            strncpy(header.viktar_name, file, VIKTAR_MAX_FILE_NAME_LEN);
+		ofd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644); // 0644 permissions
+		if (ofd < 0) {
+			fprintf(stderr, "Failed to open output archive file %s\n", filename);
+			exit(EXIT_FAILURE);
+		}
+		archive_filename = filename;
+	} 
+	else 
+	{
+		if(verbose) {
+			fprintf(stderr, "archive output to stdout\n");
+		}
+        	// Output to stdout
+		ofd = STDOUT_FILENO;
+		archive_filename = "stdout";
+	}
 
-            // Use stat to fill the header fields
-            if (stat(file, &st) == 0) {
-                header.st_mode = st.st_mode;
-                header.st_uid = st.st_uid;
-                header.st_gid = st.st_gid;
-                header.st_size = st.st_size;
-		header.st_atim.tv_sec = st.st_atim.tv_sec;
-		header.st_mtim.tv_sec = st.st_mtim.tv_sec;
-		header.st_ctim.tv_sec = st.st_ctim.tv_sec;
+	if (argc > 1) 
+	{
+		// Archive contains files, write the viktar header
+		if (write(ofd, VIKTAR_FILE, strlen(VIKTAR_FILE)) < 0) {
+    			fprintf(stderr, "Failed to write viktar header to %s\n", archive_filename);
+    			exit(EXIT_FAILURE);
+		}
 
-            } else {
-                perror("Failed to stat source file");
-                continue;
-            }
-
-            // Write the viktar header for the current file
-            if (write(ofd, &header, sizeof(header)) < 0) {
-                fprintf(stderr, "Failed to write viktar header for %s to %s\n", file, archive_filename);
-                exit(EXIT_FAILURE);
-            }
-
-            // Open and write the content of the current file to the archive
-            ifd = open(file, O_RDONLY);
-            if (ifd < 0) {
-                fprintf(stderr, "Failed to open file %s for archiving\n", file);
-                continue;
-            }
+		// Process each file specified on the command line
+		for (int i = 0; i < argc; i++) 
+		{
+			char *file = argv[i]; 
+			struct stat st;
+			int ifd;
+			char * buffer;
+			size_t chunk_size;
+			ssize_t bytes_read;
 
 
-            while ((bytes_read = read(ifd, buffer, sizeof(buffer))) > 0) {
-                if (write(ofd, buffer, bytes_read) < 0) {
-                    fprintf(stderr, "Failed to write file content for %s to %s\n", file, archive_filename);
-                    break;
-                }
-            }
+			// Set the viktar header information for the current file
+			memset(&header, 0, sizeof(viktar_header_t));
+			strncpy(header.viktar_name, file, VIKTAR_MAX_FILE_NAME_LEN);
 
-            close(ifd);
-        }
-    } else {
-        // No files specified, create an empty viktar archive with just the header
-        if (write(ofd, VIKTAR_FILE, strlen(VIKTAR_FILE)) < 0) {
-            fprintf(stderr, "Failed to write viktar header to %s\n", archive_filename);
-            exit(EXIT_FAILURE);
-        }
-    }
+			// Use stat to fill the header fields
+			if (stat(file, &st) == 0) 
+			{
+				header.st_mode = st.st_mode;
+				header.st_uid = st.st_uid;
+				header.st_gid = st.st_gid;
+				header.st_size = st.st_size;
+				header.st_atim.tv_sec = st.st_atim.tv_sec;
+				header.st_mtim.tv_sec = st.st_mtim.tv_sec;
+				header.st_ctim.tv_sec = st.st_ctim.tv_sec;
 
-    if (filename != NULL) {
-        close(ofd);
-    }
+			} else {
+				fprintf(stderr,"failed to stat file \"%s\"\n", file);
+				fprintf(stderr, "exiting...\n");
+				continue;
+			}
+
+			// Write the viktar header for the current file
+			if (write(ofd, &header, sizeof(header)) < 0) {
+				fprintf(stderr, "Failed to write viktar header for %s to %s\n", file, archive_filename);
+				exit(EXIT_FAILURE);
+			}
+
+			// Open and write the content of the current file to the archive
+			ifd = open(file, O_RDONLY);
+			if (ifd < 0) {
+				fprintf(stderr, "Failed to open file %s for archiving\n", file);
+				continue;
+			}
+			
+			chunk_size = 1024;
+			buffer = (char *)malloc(chunk_size);
+			if (buffer == NULL) {
+				fprintf(stderr, "Failed to allocate memmory for buffer\n");
+				exit(EXIT_FAILURE);
+			}
+			while ((bytes_read = read(ifd, buffer, chunk_size)) > 0) 
+			{
+				if (write(ofd, buffer, bytes_read) < 0) {
+					fprintf(stderr, "Failed to write file content for %s to %s\n", file, archive_filename);
+					break;
+				}
+				else {
+					if (verbose) {
+						fprintf(stderr, " adding file: %s to archive: (null)\n", file);
+					}
+				}
+			}
+			free(buffer);
+			close(ifd);
+		}
+	
+	
+	} 
+
+	else 
+	{
+		// No files specified, create an empty viktar archive with just the header
+		if (write(ofd, VIKTAR_FILE, strlen(VIKTAR_FILE)) < 0) {
+			fprintf(stderr, "Failed to write viktar header to %s\n", archive_filename);
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	if (filename != NULL) {
+		close(ofd);
+	}
 
 }
 
