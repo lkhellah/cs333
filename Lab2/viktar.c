@@ -148,25 +148,25 @@ void toc(char * filename, int action)
 			
 			struct passwd *pwd;
 			struct group *grp;
-			char mtime_str[30];
-			char atime_str[30];
+			char mtime_str[100];
+			char atime_str[100];
 			struct tm mtime_tm;
 			struct tm atime_tm;
 			//print mode
 			symb_rep(header.st_mode); 
 			//print user
 			pwd = getpwuid(header.st_uid);
-			printf("\t\tuser: %s\n", pwd->pw_name); 
+			printf("\t\tuser:  %s\n", pwd->pw_name); 
 			//print group
 			grp = getgrgid(header.st_gid);
 			printf("\t\tgroup: %s\n", grp->gr_name);
 			//print size
-			printf("\t\tfile size: %jd\n", (intmax_t) header.st_size);
+			printf("\t\tsize:  %jd\n", (intmax_t) header.st_size);
 			//print time
-			localtime_r(&header.st_mtim.tv_sec, &mtime_tm);
-			strftime(mtime_str, sizeof(mtime_str), "mtime: %Y-%m-%d %H:%M:%S %Z", &mtime_tm);
-			localtime_r(&header.st_atim.tv_sec, &atime_tm);
-			strftime(atime_str, sizeof(atime_str), "atime: %Y-%m-%d %H:%M:%S %Z", &atime_tm);
+			localtime_r(&header.st_mtime, &mtime_tm);
+			strftime(mtime_str, sizeof(mtime_str), "\t\tmtime: %Y-%m-%d %H:%M:%S %Z", &mtime_tm);
+			localtime_r(&header.st_atime, &atime_tm);
+			strftime(atime_str, sizeof(atime_str), "\t\tatime: %Y-%m-%d %H:%M:%S %Z", &atime_tm);
 			printf("%s\n%s\n", mtime_str, atime_str);
 			
 		}
@@ -226,7 +226,7 @@ void symb_rep(mode_t mode)
          symbolicMode[10] = ' ';  
          symbolicMode[11] = '\0';
  
-         printf("\t\tmode: %s\n", symbolicMode);
+         printf("\t\tmode:  %s\n", symbolicMode);
  
  }
 void extract(char * filename, char ** argv)
