@@ -80,7 +80,8 @@ int main(int argc, char *argv[])
 			extract(filename, &argv[optind]); //&argv[optind] gives address of list of files  
 		break;
 		case 2: //create
-			create(filename, &argv[optind], argc);
+			create(filename, argv, argc);
+			//create(filename, &argv[optind], argc);
 		break;
 		case 3: //short table
 		case 4: //long table
@@ -338,13 +339,17 @@ void extract(char * filename, char ** argv)
 
 
 void create(char *filename, char *argv[], int argc) {
-	int ofd;  // Output file descriptor
+	int ofd = STDOUT_FILENO;  // Output file descriptor
 	viktar_header_t header;
 	char *archive_filename;
+	umask(0);
 
 	// Determine the output file descriptor
 	if (filename != NULL) 
 	{
+		if(verbose) {
+			fprintf(stderr, "creating archive file: \"%s\"\n", filename);
+		}
 
 		ofd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644); // 0644 permissions
 		if (ofd < 0) {
@@ -363,7 +368,7 @@ void create(char *filename, char *argv[], int argc) {
 		archive_filename = "stdout";
 	}
 
-	if (argc > 1) 
+	if (optind < argc)
 	{
 		// Archive contains files, write the viktar header
 		if (write(ofd, VIKTAR_FILE, strlen(VIKTAR_FILE)) < 0) {
@@ -372,12 +377,12 @@ void create(char *filename, char *argv[], int argc) {
 		}
 
 		// Process each file specified on the command line
-		for (int i = 0; i < argc; i++) 
+		for (int i = optind; i < argc; i++) 
 		{
 			char *file = argv[i]; 
 			struct stat st;
 			int ifd;
-			char * buffer;
+			char buffer[1024];
 			size_t chunk_size;
 			ssize_t bytes_read;
 
@@ -386,6 +391,10 @@ void create(char *filename, char *argv[], int argc) {
 			memset(&header, 0, sizeof(viktar_header_t));
 			strncpy(header.viktar_name, file, VIKTAR_MAX_FILE_NAME_LEN);
 
+			if (verbose) {
+				fprintf(stderr, " adding file: %s to archive: %s\n", file, filename);
+			}
+		\
 			// Use stat to fill the header fields
 			if (stat(file, &st) == 0) 
 			{
@@ -393,9 +402,9 @@ void create(char *filename, char *argv[], int argc) {
 				header.st_uid = st.st_uid;
 				header.st_gid = st.st_gid;
 				header.st_size = st.st_size;
-				header.st_atim.tv_sec = st.st_atim.tv_sec;
-				header.st_mtim.tv_sec = st.st_mtim.tv_sec;
-				header.st_ctim.tv_sec = st.st_ctim.tv_sec;
+				header.st_atim = st.st_atim;
+				header.st_mtim = st.st_mtim;
+				header.st_ctim = st.st_ctim;
 
 			} else {
 				fprintf(stderr,"failed to stat file \"%s\"\n", file);
@@ -417,7 +426,8 @@ void create(char *filename, char *argv[], int argc) {
 			}
 			
 			chunk_size = 1024;
-			buffer = (char *)malloc(chunk_size);
+			//buffer = (char *)malloc(chunk_size);
+			
 			if (buffer == NULL) {
 				fprintf(stderr, "Failed to allocate memmory for buffer\n");
 				exit(EXIT_FAILURE);
@@ -428,13 +438,8 @@ void create(char *filename, char *argv[], int argc) {
 					fprintf(stderr, "Failed to write file content for %s to %s\n", file, archive_filename);
 					break;
 				}
-				else {
-					if (verbose) {
-						fprintf(stderr, " adding file: %s to archive: (null)\n", file);
-					}
-				}
 			}
-			free(buffer);
+			//free(buffer);
 			close(ifd);
 		}
 	
