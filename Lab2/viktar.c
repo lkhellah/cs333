@@ -268,9 +268,9 @@ void extract(char * filename, char ** argv)
     	old_umask = umask(0);
 	
     	while (read(ifd, &header, sizeof(header)) > 0) {
-		char buf[100]; 
+		char buf[1024];
 		char * file_data;
-		struct timeval times[2];
+		struct timespec times[2];
         	int should_extract = 0; // Initialize to not extract
 		
 		memset(buf, 0, sizeof(buf));
@@ -285,8 +285,9 @@ void extract(char * filename, char ** argv)
             		}
         	}
 		
-		if (should_extract)
+		if (should_extract == 1 || *argv == NULL) //should extract is for all files, *argv=NULL is extract all since no files specified
 		{
+
 			// Open a new file with the same name as in the archive and specified permissions
 			ofd = open(buf, O_WRONLY | O_CREAT, header.st_mode);
 			if (ofd < 0) {
@@ -308,17 +309,18 @@ void extract(char * filename, char ** argv)
 				continue; // Skip to the next file
 			}
 			write(ofd, file_data, header.st_size);
-			close(ofd);
 			free(file_data);
+
+
+			// If the restore time flag is set, set the file's access and modification times
+			times[0] = header.st_atim;
+			times[1] = header.st_mtim;
+			futimens(ofd, times);
 
 			// Set the file's permissions to match the information from the archive
 			fchmod(ofd, header.st_mode);
-
-			// If the restore time flag is set, set the file's access and modification times
-			times[0].tv_sec = header.st_atim.tv_sec;
-			times[1].tv_sec = header.st_mtim.tv_sec;
-			//times[2].tv_sec = header.st_ctime.tv_sec;
-			futimes(ofd, times);
+			
+			close(ofd);
 		}
 		else
 		{
@@ -426,7 +428,6 @@ void create(char *filename, char *argv[], int argc) {
 			}
 			
 			chunk_size = 1024;
-			//buffer = (char *)malloc(chunk_size);
 			
 			if (buffer == NULL) {
 				fprintf(stderr, "Failed to allocate memmory for buffer\n");
@@ -439,7 +440,6 @@ void create(char *filename, char *argv[], int argc) {
 					break;
 				}
 			}
-			//free(buffer);
 			close(ifd);
 		}
 	
