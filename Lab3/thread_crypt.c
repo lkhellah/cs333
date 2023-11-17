@@ -12,20 +12,23 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <crypt.h> //use crypt_rn
 #include "thread_crypt.h"
 
-void print_help();
+void print_help(void);
 int main(int argc, char *argv[])
 {
 	int opt = 0;
 	char * ifile = NULL;
 	char * ofile = NULL;
+	FILE *output_file = stdout; //default output without -o
 	int algorithm = 0; // default is DES 
 	int salt_length = 2; //default salt length corresponding to default algorithm
 	int rounds = 5000;
-	unsigned int seed = 0; //is 0 fine for default orrr
+	unsigned int seed = 0; 
 	int num_threads = 1; //default number of threads
 	int verbose = 0;
+	struct stat st;
 
 	while ((opt = getopt(argc, argv, OPTIONS)) != -1)
 	{
@@ -45,9 +48,13 @@ int main(int argc, char *argv[])
 
 			case 'l':
 				salt_length = atoi(optarg);
+				//question: do i error check they inputted the right length
+				// are the characters given the maximum length for the corresponding algorithm
+				//"In the case of the DES algorithm, a 2-character salt is always used, regardless of
+				//the setting of the -l command line option.
 				break;
 			
-			case 'r':
+			case 'r': // used with -l 5 or -l 6
 				if (rounds < 1000) 
 					rounds = 1000;
 				else if (rounds > 999999999) 
@@ -56,6 +63,7 @@ int main(int argc, char *argv[])
 	
 			case 'R':
 				seed = atoi(optarg);
+				srand(seed);
 				break;
 
 			case 't':
@@ -83,11 +91,59 @@ int main(int argc, char *argv[])
 
 	}
 
+	switch(algorithm)
+	{
+		case 0:
+			salt_length = 2;
+			break;
+		case 1:
+		case 5:
+		case 6:
+			break;
+		default:
+			fprintf(stderr, "invalid algorithm\n");
+			exit(EXIT_FAILURE);
+			break;
+	}
 
+	// INPUT
+	if (NULL != ifile)
+	{
+		char * file_content;
+		// use stat to figure out number of bytes in input file
+		if (stat(ifile, &st) == 0)
+		{
+			//use malloc to allocate that amount
+			file_content = (char *)malloc(st.st_size);
+			//check malloc success
+			if(file_content != NULL) 
+			{
+				free(file_content);
+
+			}
+			else
+			{
+				perror("malloc error\n");
+				exit(EXIT_FAILURE);
+			}
+		}
+		else
+		{
+			perror("stat error\n");
+			exit(EXIT_FAILURE);	
+		}
+	}
+	else
+	{
+		fprintf(stderr, "must provide input file name\n");
+		exit(EXIT_FAILURE);	
+	}
+
+	// OUTPUT
 	if (NULL != ofile) // write to file
 	{
-		int file_descriptor = open(ofile, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-		if (file_descriptor == -1)
+		output_file = fopen(ofile, "w");
+		if (output_file == NULL)
 		{
 			perror("Error opening the output file");
 			exit(EXIT_FAILURE);
@@ -96,12 +152,25 @@ int main(int argc, char *argv[])
 		// Write to the file using the file descriptor
 		// ...
 
-		close(file_descriptor); // Close the file when done
 	}
 	
 	else //write to stdout 
 		printf("Writing to stdout (layaal print)\n");
 
+	fclose(output_file); // Close the file when done
 }
 
-
+void print_help(void)
+{
+	fprintf(stderr, "./thread_crypt ...\n");
+	fprintf(stderr, "	Options: i:o:hva:l:R:t:r:\n"
+			"	-i file		input file name (required)\n"
+			"	-o file		output file name (default stdout)\n"
+			"	-a #		algorithm to use for hashing [0,1,5,6] (default 0 = DES)\n"
+			"	-l #		length of salt (default 2 for DES, 8 for MD-5, 16 for SHA)\n"
+			"	-r #		rounds to use for SHA-256, or SHA-512 (default 5000)\n"
+			"	-R #		seed for rand() (default none)\n"
+			"	-t #		number of threads to create (default 1)\n"
+			"	-v		enable verbose mode\n"
+			"	-h		helpful text\n");
+}
