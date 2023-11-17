@@ -16,12 +16,15 @@
 #include "thread_crypt.h"
 
 void print_help(void);
+int get_next_word(void);
+
 int main(int argc, char *argv[])
 {
 	int opt = 0;
 	char * ifile = NULL;
 	char * ofile = NULL;
 	FILE *output_file = stdout; //default output without -o
+	FILE *input_file; 
 	int algorithm = 0; // default is DES 
 	int salt_length = 2; //default salt length corresponding to default algorithm
 	int rounds = 5000;
@@ -29,6 +32,7 @@ int main(int argc, char *argv[])
 	int num_threads = 1; //default number of threads
 	int verbose = 0;
 	struct stat st;
+	pthreads *threads = NULL;
 
 	while ((opt = getopt(argc, argv, OPTIONS)) != -1)
 	{
@@ -48,10 +52,6 @@ int main(int argc, char *argv[])
 
 			case 'l':
 				salt_length = atoi(optarg);
-				//question: do i error check they inputted the right length
-				// are the characters given the maximum length for the corresponding algorithm
-				//"In the case of the DES algorithm, a 2-character salt is always used, regardless of
-				//the setting of the -l command line option.
 				break;
 			
 			case 'r': // used with -l 5 or -l 6
@@ -107,9 +107,13 @@ int main(int argc, char *argv[])
 	}
 
 	// INPUT
+	// ifile: name of input file
+	// input_file: FILE * for file stream
+	// file_content: dynamically allocated buffer to store content of input file
 	if (NULL != ifile)
 	{
 		char * file_content;
+		
 		// use stat to figure out number of bytes in input file
 		if (stat(ifile, &st) == 0)
 		{
@@ -118,7 +122,21 @@ int main(int argc, char *argv[])
 			//check malloc success
 			if(file_content != NULL) 
 			{
-				free(file_content);
+				// open the file for reading
+				input_file = fopen(ifile, "r");
+				if(input_file != NULL)
+				{
+					//is this where i call get next word 
+					fread(file_content, 1, st.st_size, input_file);
+					//use file_content to access input file content
+					
+				}		
+				else 
+				{
+					("failed to open input file\n")
+					exit(EXIT_FAILURE);
+				}
+				
 
 			}
 			else
@@ -149,8 +167,6 @@ int main(int argc, char *argv[])
 			exit(EXIT_FAILURE);
 		}
              
-		// Write to the file using the file descriptor
-		// ...
 
 	}
 	
@@ -158,6 +174,7 @@ int main(int argc, char *argv[])
 		printf("Writing to stdout (layaal print)\n");
 
 	fclose(output_file); // Close the file when done
+	free(file_content);
 }
 
 void print_help(void)
