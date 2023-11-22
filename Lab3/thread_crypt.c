@@ -12,12 +12,22 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <crypt.h> //use crypt_rn
+#include <crypt.h> 
+#include <string.h>
+#include <pthread.h>
+
 #include "thread_crypt.h"
 
 void print_help(void);
-int get_next_word(void);
-void *hash(void * arg, int algorithm);
+char * get_next_word(void);
+void *hash(void *);
+void gen_salt(char * salt);
+
+int verbose = 0;
+static int algorithm = 0; // default is DES 
+static int salt_length = 2; //default salt length corresponding to default algorithm
+static int rounds = 5000;
+char * file_content;
 
 int main(int argc, char *argv[])
 {
@@ -26,15 +36,12 @@ int main(int argc, char *argv[])
 	char * ofile = NULL;
 	FILE *output_file = stdout; //default output without -o
 	FILE *input_file; 
-	int algorithm = 0; // default is DES 
-	int salt_length = 2; //default salt length corresponding to default algorithm
-	int rounds = 5000;
 	unsigned int seed = 0; 
 	int num_threads = 1; //default number of threads
-	int verbose = 0;
 	struct stat st;
 	pthread_t *threads = NULL;
-
+	long tid = 0;
+	
 	while ((opt = getopt(argc, argv, OPTIONS)) != -1)
 	{
 		switch(opt)
@@ -116,7 +123,6 @@ int main(int argc, char *argv[])
 	// file_content: dynamically allocated buffer to store content of input file
 	if (NULL != ifile)
 	{
-		char * file_content;
 		
 		// use stat to figure out number of bytes in input file
 		if (stat(ifile, &st) == 0)
@@ -131,16 +137,13 @@ int main(int argc, char *argv[])
 				input_file = fopen(ifile, "r");
 				if(input_file != NULL)
 				{
-					//is this where i call get next word 
-					//fread reading whole file possibly, check file_content
+					//fread reading whole file
 					fread(file_content, 1, st.st_size, input_file);
-					//use file_content to access input file content
-					//
-					
+					//write(1, file_content, st.st_size);
 				}		
 				else 
 				{
-					fprintf(stderr,"failed to open input file\n")
+					fprintf(stderr,"failed to open input file\n");
 					exit(EXIT_FAILURE);
 				}
 				
@@ -177,31 +180,52 @@ int main(int argc, char *argv[])
 
 	}
 	
-	/*for (int i = 0; i < num_threads; ++i)
-	{
-		pthread_create(//arg week 5 material)
-	}*/
 	//start multi thread: loop with pthread create and join, use mutex somewhere here 
-	hash(file_content);
+	threads = malloc(num_threads * sizeof(pthread_t));	
+	for (tid = 0; tid < num_threads; tid++)
+	{
+		pthread_create(&threads[tid], NULL, hash, NULL);
+	}
+	for (tid = 0; tid < num_threads; tid++) {
+		pthread_join(threads[tid], NULL);
+	}
 	fclose(output_file); // Close the file when done
 	free(file_content);
 }
-void gen_salt(char * salt, int algorithm, int salt_length)
+
+char * get_next_word(void)
+{
+	char * word = NULL;
+ 	static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;		
+	static int initialized = 0;
+	pthread_mutex_lock(&lock);
+	if(!initialized) {
+		initialized = 1;
+		word = strtok(file_content, "\n");
+	}
+	else {
+		word = strtok(NULL, "\n");
+	}
+	pthread_mutex_unlock(&lock);
+	return word;
+}
+
+void gen_salt(char * salt)
 {
 		static const char salt_chars[] = {SALT_CHARS};
-		char s[CRYPT_OUTPUT_SIZE] = NULL;
-		//salt stuff
+		char s[CRYPT_OUTPUT_SIZE] = {'\0'};
+		int rand_value = 0;
 		switch (algorithm) 
 		{
 			case 1:
 			case 5:
 			case 6:
-				for(int i = 0, rand_value = 0; i < salt_length; ++i) {
+				for(int i = 0; i < salt_length; ++i) {
 					rand_value = rand();
 					rand_value %= strlen(salt_chars);
 					s[i] = salt_chars[rand_value];
 				}
-				sprintf(salt, "$%d$%s%s$", algorithm, (rounds ? rounds : ""), s);
+				sprintf(salt, "$%d$%d%s$", algorithm, rounds, s);
 			break;
 			default:
 				rand_value = rand();
@@ -212,29 +236,29 @@ void gen_salt(char * salt, int algorithm, int salt_length)
 				salt[1] = salt_chars[rand_value];
 				break;
 
+		}
 }
 
 
-void * hash(void * arg)
+void * hash(void * v)
 { 
 	//char * crypt_rn(const char *phrase, const char *setting, struct crypt_data *data, int size);
-	char * text = (char *) arg;
 	struct crypt_data data;
-	char *hashed_password;
-	hashed_password = crypt_rn(text, salt, 
-	char salt[CRYPT_OUTPUT_SIZE]
-	//char salt[CRYPT_OUTPUT_SIZE] = {'\0'}; 
+	char *word;
+	char salt[CRYPT_OUTPUT_SIZE] = {'\0'}; 
+	char * hashed_password;
 
-	/*
-	use memset to initalize all data fields of 'data'. memset(data, 0, sizeof(data))
-	while loop, need var ex 'password'. while (passwird = getnextword(....) != NULL)
-		within while loop, call gen_salt(empty salt variable)
-		strncpy(from salt to data.setting, CRYPT_OUTPUT_SIZE) 
-		strncpy(from word to data.input, CRYPT_MAX_PASSPHRASE_SIZE)
-		call encryption: crypt_rn(salt, word, &data, sizeof(data))
-		fprintf(salt)
-	pthread_exit(EXIT_SUCCESS)
-	*/
+	memset(&data, 0, sizeof(data));
+	word = get_next_word();
+	while (word != NULL) {
+		gen_salt(salt);
+		strncpy(data.setting, salt, CRYPT_OUTPUT_SIZE);
+		strncpy(data.input,word , CRYPT_MAX_PASSPHRASE_SIZE);
+		hashed_password = crypt_rn(word, salt, &data, sizeof(data));
+		printf("%s:%s\n", word, hashed_password);
+		word = get_next_word();
+	}
+	pthread_exit(EXIT_SUCCESS);
 	
 }
 
