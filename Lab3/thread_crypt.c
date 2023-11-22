@@ -27,6 +27,7 @@ int verbose = 0;
 static int algorithm = 0; // default is DES 
 static int salt_length = 2; //default salt length corresponding to default algorithm
 static int rounds = 5000;
+static FILE *output_file;
 char * file_content;
 
 int main(int argc, char *argv[])
@@ -34,13 +35,13 @@ int main(int argc, char *argv[])
 	int opt = 0;
 	char * ifile = NULL;
 	char * ofile = NULL;
-	FILE *output_file = stdout; //default output without -o
 	FILE *input_file; 
 	unsigned int seed = 0; 
 	int num_threads = 1; //default number of threads
 	struct stat st;
 	pthread_t *threads = NULL;
 	long tid = 0;
+	output_file = stdout; //default output without -o
 	
 	while ((opt = getopt(argc, argv, OPTIONS)) != -1)
 	{
@@ -139,15 +140,14 @@ int main(int argc, char *argv[])
 				{
 					//fread reading whole file
 					fread(file_content, 1, st.st_size, input_file);
+					fclose(input_file);
 					//write(1, file_content, st.st_size);
 				}		
 				else 
 				{
 					fprintf(stderr,"failed to open input file\n");
 					exit(EXIT_FAILURE);
-				}
-				
-
+				}		
 			}
 			else
 			{
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
 
 	}
 	
-	//start multi thread: loop with pthread create and join, use mutex somewhere here 
+	//threading 
 	threads = malloc(num_threads * sizeof(pthread_t));	
 	for (tid = 0; tid < num_threads; tid++)
 	{
@@ -191,6 +191,8 @@ int main(int argc, char *argv[])
 	}
 	fclose(output_file); // Close the file when done
 	free(file_content);
+	free(threads);
+	pthread_exit(EXIT_SUCCESS);
 }
 
 char * get_next_word(void)
@@ -255,7 +257,7 @@ void * hash(void * v)
 		strncpy(data.setting, salt, CRYPT_OUTPUT_SIZE);
 		strncpy(data.input,word , CRYPT_MAX_PASSPHRASE_SIZE);
 		hashed_password = crypt_rn(word, salt, &data, sizeof(data));
-		printf("%s:%s\n", word, hashed_password);
+		fprintf(output_file,"%s:%s\n", word, hashed_password);
 		word = get_next_word();
 	}
 	pthread_exit(EXIT_SUCCESS);
